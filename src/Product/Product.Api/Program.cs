@@ -3,10 +3,15 @@ using Microsoft.EntityFrameworkCore;
 using Product.Application;
 using Product.Infrastructure;
 var builder = WebApplication.CreateBuilder(args);
+var connectionString = builder.Configuration.GetConnectionString("Database");
+if (string.IsNullOrWhiteSpace(connectionString))
+    throw new InvalidOperationException(
+        "ConnectionStrings:Database is required. For local development, start scripts/start-infrastructure.ps1 " +
+        "and use the http launch profile (Development). For Docker, use docker compose up -d --build.");
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
-builder.Services.AddDbContext<AppDbContext>(o => o.UseNpgsql(builder.Configuration.GetConnectionString("Database")));
+builder.Services.AddDbContext<AppDbContext>(o => o.UseNpgsql(connectionString));
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IProductRepository, ProductRepository>();
 var bootstrap = builder.Configuration["Kafka:BootstrapServers"] ?? "localhost:9092";

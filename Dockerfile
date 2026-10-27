@@ -4,6 +4,10 @@ COPY . .
 ARG SERVICE
 RUN dotnet publish src/${SERVICE}/${SERVICE}.Api -c Release -o /app --no-self-contained
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
+# Native Kafka/PostgreSQL clients probe for the GSSAPI runtime library.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgssapi-krb5-2 \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /app .
 ARG SERVICE

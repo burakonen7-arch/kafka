@@ -17,7 +17,7 @@ public interface IOrderRepository
 }
 public sealed class OrderService(IOrderRepository repository) : IOrderService
 {
-    // The message handler owns the transaction and commits these tracked changes with the inbox.
+   
     public async Task CompleteAsync(Guid orderId, bool success, string? reason, CancellationToken ct)
     {
         var order = await repository.GetForUpdateAsync(orderId, ct);
@@ -25,14 +25,19 @@ public sealed class OrderService(IOrderRepository repository) : IOrderService
         order.Status = success ? "Confirmed" : "Rejected";
         order.FailureReason = reason;
     }
+    
+    
     public async Task<OrderItem> CreateAsync(CreateOrder request, CancellationToken ct)
     {
         if (request.ProductId == Guid.Empty || request.Quantity <= 0)
             throw new ArgumentException("ProductId and positive Quantity are required.");
+       
         var item = new OrderItem { ProductId = request.ProductId, Quantity = request.Quantity };
         await repository.AddAsync(item, ct);
         return item;
     }
+    
+    
     public Task<OrderItem?> GetAsync(Guid id, CancellationToken ct) => repository.GetAsync(id, ct);
     public Task<List<OrderItem>> ListAsync(CancellationToken ct) => repository.ListAsync(ct);
 }

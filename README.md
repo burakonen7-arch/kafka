@@ -11,7 +11,38 @@ docker compose up -d --build
 ```
 
 Yerel makinenizde Product Swagger: `http://localhost:5001/swagger`, Order Swagger: `http://localhost:5002/swagger`.
+Kafka paneli: `http://localhost:8080` ([Kafbat Kafka UI](https://github.com/kafbat/kafka-ui)). Panel, `local` cluster'ına Docker ağı üzerinden `kafka:29092` ile bağlanır; topic'ler, mesajlar ve consumer grupları buradan incelenebilir. Host portu `KAFKA_UI_PORT` ortam değişkeniyle değiştirilebilir.
 Bulut onboarding arayüzü localhost web önizlemesi sağlamaz; burada yerel HTTP istekleriyle doğrulama yapılır.
+
+### Windows / Rider ile geliştirme
+
+Docker Desktop'ı Linux containers modunda başlatın. API'leri Rider'dan çalıştıracaksanız önce yalnızca PostgreSQL, Kafka, topic kurulumu ve paneli başlatın:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\start-infrastructure.ps1
+```
+
+Ardından Rider'ın çalıştırma listesinden **Order.Api.Local** ve **Product.Api.Local** konfigürasyonlarını seçin. `.run/` altındaki bu paylaşılan konfigürasyonlar `Development` ortamını, API portlarını ve çalışma dizinlerini açıkça ayarlar. Liste güncellenmediyse çözümü kapatıp yeniden açın.
+
+`Properties/launchSettings.json` dosyalarındaki **http** profilleri de kullanılabilir; Rider'daki adları **Order.Api: http** ve **Product.Api: http** şeklindedir. Önceden oluşturulmuş `.NET Project` konfigürasyonları launch profilini kendiliğinden kullanmaz. Alternatif olarak iki ayrı terminalde:
+
+```powershell
+dotnet run --project src/Product/Product.Api --launch-profile http
+dotnet run --project src/Order/Order.Api --launch-profile http
+```
+
+Profiller `Development` ortamını ve Product için `5001`, Order için `5002` portunu ayarlar; Swagger otomatik açılır. `appsettings.Development.json` dosyaları Docker'daki PostgreSQL'e `localhost:5434`, Kafka'ya `localhost:9092` üzerinden bağlanır ve ilk açılışta DB şemasını oluşturur. Docker Compose içindeki bağlantı ayarları bu değerleri container adresleriyle geçersiz kılar.
+
+Tam Docker kurulumunu çalıştırıyorsanız API'leri aynı portlarda Rider'dan ayrıca başlatmayın. Rider'a geçmeden önce `docker compose stop product-api order-api` ile yalnızca API container'larını durdurabilirsiniz.
+
+`global.json`, .NET SDK `10.0.401` veya aynı feature band içindeki daha yeni yama sürümünü kabul eder. Docker derlemesi ve bulut kurulum betiği `10.0.402` kullanır.
+
+### Bağlantı hatalarını giderme
+
+- **`ConnectionString property has not been initialized` / `ConnectionStrings:Database is required`:** API geliştirme profili olmadan başlatılmıştır ve bağlantı dizesi yoktur. Rider'da **Order.Api.Local** / **Product.Api.Local** veya **Order.Api: http** / **Product.Api: http** konfigürasyonunu seçin. Production için `ConnectionStrings__Database` ve `Kafka__BootstrapServers` değerlerini ortamdan sağlayın. Eksik DB ayarı worker'lar başlamadan açıklayıcı bir hatayla bildirilir.
+- **`localhost:9092 ... brokers are down`:** host API'si Kafka broker'ına erişemiyor. Docker Desktop'ı ve `start-infrastructure.ps1` betiğini çalıştırın; `docker compose ps -a` ve `docker compose logs --tail 100 kafka kafka-init` ile durumu kontrol edin.
+- **`127.0.0.1:5434` bağlantısı reddediliyor:** PostgreSQL container'ı durmuş olabilir. `start-infrastructure.ps1` betiğini çalıştırın; PostgreSQL'i Windows'a ayrıca kurmanız gerekmez. İlk açılışta `products` / `orders` veritabanları, API açılışında da tablolar otomatik oluşturulur. Mevcut DB volume'ü korunur.
+- **`docker` komutu bulunamıyor:** `start-infrastructure.ps1` standart ve kullanıcıya özel Docker Desktop kurulumlarını PATH'te olmasa da bulur. Docker Desktop kurulumunu ve terminalin PATH ayarını kontrol edin; kurulumdan sonra terminali ve Rider'ı yeniden açın.
 
 Tam Docker derlemesi Microsoft container registry ve onun bölgesel indirme adreslerine erişim gerektirir. Alternatif: PostgreSQL ve Kafka Docker'da, API'ler host üzerinde:
 
@@ -22,7 +53,7 @@ bash scripts/start.sh
 python3 scripts/smoke.py
 ```
 
-Normal geliştirme makinesinde `global.json` ile belirtilen .NET SDK'yı kurun. `docker compose up -d --wait postgres kafka` ve `docker compose up -d kafka-init` sonrası API'leri IDE'nizde aşağıdaki environment değişkenleriyle başlatabilirsiniz:
+Manuel altyapı başlatma sırası: `docker compose up -d --wait postgres kafka`, `docker compose up -d kafka-init`, `docker compose wait kafka-init`, `docker compose up -d kafka-ui`. `http` launch profilini kullanmıyorsanız API'leri IDE'nizde aşağıdaki environment değişkenleriyle başlatabilirsiniz:
 
 | Değişken | Product | Order |
 |---|---|---|
@@ -30,7 +61,9 @@ Normal geliştirme makinesinde `global.json` ile belirtilen .NET SDK'yı kurun. 
 | ASPNETCORE_URLS | http://localhost:5001 | http://localhost:5002 |
 | Kafka__BootstrapServers | localhost:9092 | localhost:9092 |
 | Database__Initialize | true | true |
-| ConnectionStrings__Database | Host=localhost;Database=products;Username=app;Password=local-development-only | Host=localhost;Database=orders;Username=app;Password=local-development-only |
+| ConnectionStrings__Database | Host=localhost;Port=5434;Database=products;Username=app;Password=local-development-only | Host=localhost;Port=5434;Database=orders;Username=app;Password=local-development-only |
+
+PostgreSQL host portu, diğer yerel projelerle çakışmaması için varsayılan olarak `5434` olarak ayarlanmıştır. `POSTGRES_PORT` ortam değişkeniyle değiştirilebilir; API'leri host üzerinde çalıştırırken bağlantı dizesindeki `Port` değerini de buna göre ayarlayın. Docker içindeki API'ler `postgres:5432` kullanır.
 
 `Database__Initialize=true` yalnızca yerel demo içindir: `EnsureCreated` boş veritabanında şemayı oluşturur; mevcut şemayı güncellemez. Model değişikliklerinde veri korumak gerekiyorsa EF migrations ekleyin; EnsureCreated ve migrations akışlarını aynı veritabanında karıştırmayın. Compose ilk açılışta `scripts/init-db.sql` ile iki veritabanını oluşturur. Parola yalnızca yerel geliştirme içindir.
 

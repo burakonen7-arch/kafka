@@ -13,6 +13,8 @@ public sealed class OrdersController(IOrderService service) : ControllerBase
         var item = await service.GetAsync(id, ct);
         return item is null ? NotFound() : Ok(item);
     }
+    
+    
     [HttpPost]
     public async Task<IActionResult> Create(CreateOrder request, CancellationToken ct)
     {
